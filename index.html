@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Weather App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #333;
+            padding: 20px;
+        }
+        .weather-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 100%;
+            max-width: 350px;
+            margin-bottom: 20px;
+        }
+        h1 { margin-bottom: 15px; font-size: 22px; color: #2d3436; }
+        .search-box {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        input {
+            padding: 10px;
+            flex: 1;
+            border: 1px solid #dfe6e9;
+            border-radius: 5px;
+            font-size: 15px;
+            outline: none;
+        }
+        button {
+            padding: 10px 12px;
+            background-color: #0984e3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #74b9ff; }
+        .location-btn {
+            width: 100%;
+            background-color: #00b894;
+            margin-bottom: 15px;
+        }
+        .location-btn:hover { background-color: #55efc4; }
+        .result { margin-top: 15px; font-size: 16px; }
+        .temp { font-size: 42px; font-weight: bold; color: #0984e3; margin: 5px 0; }
+        .icon { font-size: 48px; margin: 5px 0; }
+        .forecast-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 15px;
+            text-align: left;
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+        }
+        .forecast-day {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            background: #f8f9fa;
+            padding: 8px 10px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="weather-card">
+        <h1>🌤️ Pro Weather App</h1>
+        <button class="location-btn" onclick="getLocationWeather()">📍 Use My Current Location</button>
+        <div class="search-box">
+            <input type="text" id="cityInput" placeholder="Enter city...">
+            <button onclick="getWeatherByCity()">Search</button>
+        </div>
+        <div id="weatherResult" class="result">
+            <p>Search a city or use your location!</p>
+        </div>
+    </div>
+
+    <script>
+        // Weather code helper to get icons and descriptions
+        function getWeatherDetails(code) {
+            if (code === 0) return { text: "Clear Sky", icon: "☀️" };
+            if (code >= 1 && code <= 3) return { text: "Partly Cloudy", icon: "⛅" };
+            if (code >= 45 && code <= 48) return { text: "Foggy", icon: "🌫️" };
+            if (code >= 51 && code <= 67) return { text: "Rainy", icon: "🌧️" };
+            if (code >= 71 && code <= 77) return { text: "Snowy", icon: "❄️" };
+            if (code >= 80 && code <= 82) return { text: "Showers", icon: "🌦️" };
+            if (code >= 95) return { text: "Thunderstorm", icon: "⛈️" };
+            return { text: "Cloudy", icon: "☁️" };
+        }
+
+        async function fetchWeatherData(lat, lon, displayName) {
+            const resultDiv = document.getElementById('weatherResult');
+            resultDiv.innerHTML = "<p>Loading weather...</p>";
+
+            try {
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
+                const data = await response.json();
+
+                const currentTemp = data.current_weather.temperature;
+                const windSpeed = data.current_weather.windspeed;
+                const weatherInfo = getWeatherDetails(data.current_weather.weathercode);
+
+                // Build 5-day forecast HTML
+                let forecastHtml = `<div class="forecast-container"><strong>5-Day Forecast:</strong>`;
+                for (let i = 1; i <= 5; i++) {
+                    const dateStr = data.daily.time[i];
+                    const dayName = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
+                    const maxT = data.daily.temperature_2m_max[i];
+                    const minT = data.daily.temperature_2m_min[i];
+                    const dayWeather = getWeatherDetails(data.daily.weathercode[i]);
+
+                    forecastHtml += `
+                        <div class="forecast-day">
+                            <span>${dayName} ${dayWeather.icon}</span>
+                            <span>High: ${maxT}°C | Low: ${minT}°C</span>
+                        </div>
+                    `;
+                }
+                forecastHtml += `</div>`;
+
+                resultDiv.innerHTML = `
+                    <strong>${displayName}</strong>
+                    <div class="icon">${weatherInfo.icon}</div>
+                    <div class="temp">${currentTemp}°C</div>
+                    <p>${weatherInfo.text} • Wind: ${windSpeed} km/h</p>
+                    ${forecastHtml}
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = "<p style='color:red;'>Failed to fetch weather data.</p>";
+            }
+        }
+
+        async function getWeatherByCity() {
+            const city = document.getElementById('cityInput').value.trim();
+            const resultDiv = document.getElementById('weatherResult');
+
+            if (!city) {
+                resultDiv.innerHTML = "<p style='color:red;'>Please enter a city name!</p>";
+                return;
+            }
+
+            resultDiv.innerHTML = "<p>Finding city...</p>";
+
+            try {
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1`);
+                const geoData = await geoRes.json();
+
+                if (!geoData.results || geoData.results.length === 0) {
+                    resultDiv.innerHTML = "<p style='color:red;'>City not found!</p>";
+                    return;
+                }
+
+                const loc = geoData.results[0];
+                fetchWeatherData(loc.latitude, loc.longitude, `${loc.name}, ${loc.country || ''}`);
+            } catch (error) {
+                resultDiv.innerHTML = "<p style='color:red;'>Error searching city.</p>";
+            }
+        }
+
+        function getLocationWeather() {
+            const resultDiv = document.getElementById('weatherResult');
+            if (!navigator.geolocation) {
+                resultDiv.innerHTML = "<p style='color:red;'>Geolocation is not supported by your browser.</p>";
+                return;
+            }
+
+            resultDiv.innerHTML = "<p>Accessing your location...</p>";
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    fetchWeatherData(lat, lon, "Your Current Location");
+                },
+                () => {
+                    resultDiv.innerHTML = "<p style='color:red;'>Permission denied or location unavailable.</p>";
+                }
+            );
+        }
+    </script>
+</body>
+</html>
